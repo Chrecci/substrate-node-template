@@ -4,6 +4,26 @@
 
 A fresh FRAME-based [Substrate](https://www.substrate.io/) node, ready for hacking :rocket:
 
+## To Run
+
+Must need node version > 14.10.0
+
+```
+nvm install 16.14.0
+nvm use 16.14.0
+```
+
+In root of repository:
+```
+./target/release/node-template --dev
+```
+
+Start front-end template
+```
+cd substrate-front-end-template
+yarn install
+yarn start
+```
 ## Getting Started
 
 Follow the steps below to get started with the Node Template, or get it up and running right from
