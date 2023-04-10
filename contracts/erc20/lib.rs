@@ -103,6 +103,23 @@ mod erc20 {
             self.allowances.get((owner, spender)).unwrap_or_default()
         }
 
+        #[ink(message)]
+        pub fn increase_approve(&self, spender: AccountId, value: Balance) -> Balance {
+            let owner = self.env().caller();
+            self.allowances.insert((owner, spender), &(self.allowance(owner, spender) + value));
+            self.allowances.get((owner, spender)).unwrap_or_default()
+        }
+        
+        #[ink(message)]
+        pub fn decrease_approve(&self, spender: AccountId, value: Balance) -> Balance {
+            let owner = self.env().caller();
+            // if value > self.allowance(owner, spender) {
+            //     return Err(Error::InsufficientBalance)
+            // }
+            self.allowances.insert((owner, spender), &(self.allowance(owner, spender) + value));
+            self.allowances.get((owner, spender)).unwrap_or_default()
+        }
+
         /// Transfers tokens on the behalf of the `from` account to the `to account
         #[ink(message)]
         pub fn transfer_from(
@@ -214,6 +231,32 @@ mod erc20 {
             assert!(contract.transfer_from(alice(), bob(), 100).is_err());
             assert_eq!(contract.balance_of(bob()), 50);
             assert_eq!(contract.allowance(alice(), alice()), 150);
+        }
+
+        #[ink::test]
+        fn decrease_allowance_works() {
+            let mut contract = Erc20::new(100);
+            assert_eq!(contract.balance_of(alice()), 100);
+            let _ = contract.approve(alice(), 30);
+            assert_eq!(contract.allowance(alice(), alice()), 30);
+            let _ = contract.decrease_approve(alice(), 10);
+            assert_eq!(contract.allowance(alice(), alice()), 20);
+            //assert!(contract.decrease_approve(alice(), 30).is_err());
+            assert_eq!(contract.allowance(alice(), alice()), 20);
+            let _ = contract.decrease_approve(alice(), 20);
+            assert_eq!(contract.allowance(alice(), alice()), 0);
+
+        }
+
+        #[ink::test]
+        fn increase_allowance_works() {
+            let mut contract = Erc20::new(100);
+            assert_eq!(contract.balance_of(alice()), 100);
+            let _ = contract.approve(alice(), 30);
+            assert_eq!(contract.allowance(alice(), alice()), 30);
+            let _ = contract.increase_approve(alice(), 10);
+            assert_eq!(contract.allowance(alice(), alice()), 40);
+
         }
     }
 }
