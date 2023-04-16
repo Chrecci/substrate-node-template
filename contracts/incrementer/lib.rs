@@ -4,9 +4,7 @@
 mod incrementer {
     use ink::storage::Mapping;
 
-    /// Defines the storage of your contract.
-    /// Add new fields to the below struct in order
-    /// to add new static storage fields to your contract.
+    /// Defines storage of the contract. In this case, we want to map a user's account ID with an integer value
     #[ink(storage)]
     pub struct Incrementer {
         value: i32,
@@ -31,6 +29,7 @@ mod incrementer {
             }
         }
 
+        // Initialize contract storage
         #[ink(constructor)]
         pub fn default() -> Self {
             Self {
@@ -39,12 +38,14 @@ mod incrementer {
             }
         }
 
+        // Helper function to retrieve the caller's value stored in map
         #[ink(message)]
         pub fn get_mine(&self) -> i32 {
             let caller = self.env().caller();
             self.my_map.get(&caller).unwrap_or_default()
         }
 
+        // Insert 'by' i32 argument into map, adding it onto existing value retrieved using get_mine()
         #[ink(message)]
         pub fn inc_mine(&mut self, by: i32) {
             let caller = self.env().caller();
@@ -52,19 +53,19 @@ mod incrementer {
             self.my_map.insert(caller, &(my_value + by));
         }
 
+        // Helper function to remove a key value pair from map
         #[ink(message)]
         pub fn remove_mine(&self) {
         let caller = self.env().caller();
         self.my_map.remove(&caller)
         }
-         
-         
                  
         /// Increments our value by input 'by'
         #[ink(message)]
         pub fn inc(&mut self, by: i32) {
             self.value += by;
         }
+        
         /// Simply returns the current value of our `i32`.
         #[ink(message)]
         pub fn get(&self) -> i32 {
