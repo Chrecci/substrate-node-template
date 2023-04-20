@@ -42,7 +42,8 @@ mod insurance {
     impl Insurance {
         
         // When instantiating a new contract, and only when instantiating, we can permanently set an owner address. Only this owner address can withdraw funds
-        #[ink(constructor)]
+        // payable allows native tokens to be sent to contract
+        #[ink(constructor, payable)]
         pub fn new_insurance(premium_init: i32, deductible_init: i32, legal_name_init: String, payment_schedule_init: u32) -> Self {
 
             let is_origin = Self::env().caller_is_origin();
@@ -89,6 +90,34 @@ mod insurance {
                 reserve: Mapping::default(),
             }
         }
+        /// Retrieve the balance of the caller.
+        #[ink(message)]
+        pub fn get_balance(&self) -> Option<Balance> {
+            let caller = self.env().caller();
+            self.reserve.get(caller)
+        }
+
+        /// Credit more money to the contract.
+        #[ink(message, payable)]
+        pub fn deposit_to_contract(&mut self) {
+            let caller = self.env().caller();
+            let balance = self.reserve.get(caller).unwrap_or(0);
+
+            // retrieves paid value
+            let endowment = self.env().transferred_value();
+            self.reserve.insert(caller, &(balance + endowment));
+        }
+
+        /// Withdraw all your balance from the contract.
+        pub fn withdraw_all_from_reserve(&mut self) {
+            let caller = self.env().caller();
+            let balance = self.balances.get(caller).unwrap();
+            self.reserve.remove(caller);
+            self.env().transfer(caller, balance).unwrap()
+        }
+
+
+
 
         // Helper function to retrieve the caller's value stored in map
         #[ink(message)]
