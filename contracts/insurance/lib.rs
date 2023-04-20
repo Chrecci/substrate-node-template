@@ -23,6 +23,7 @@ mod insurance {
         legal_name: Mapping<AccountId, String>,
         // payment schedule in terms of days
         payment_schedule: Mapping<AccountId, u32>,
+        reserve: Mapping<AccountId, Balance>,
 
      }     
     
@@ -54,6 +55,7 @@ mod insurance {
             let mut deductible = Mapping::default();
             let mut legal_name = Mapping::default();
             let mut payment_schedule = Mapping::default();
+            let mut reserve = Mapping::default();
             // Always returns contract caller. Different than origin
             // If a contract calls another contract, this returns first contract, not original caller
             let caller = Self::env().caller();
@@ -62,13 +64,15 @@ mod insurance {
             deductible.insert(&caller, &deductible_init);
             legal_name.insert(&caller, &legal_name_init);
             payment_schedule.insert(&caller, &payment_schedule_init);
+            reserve.insert(&caller, &0);
 
             Self {
                 owner_account: caller,
                 premium,
                 deductible,
                 legal_name,
-                payment_schedule
+                payment_schedule,
+                reserve
             }
         }
 
@@ -82,6 +86,7 @@ mod insurance {
                 deductible: Mapping::default(),
                 legal_name: Mapping::default(),
                 payment_schedule: Mapping::default(),
+                reserve: Mapping::default(),
             }
         }
 
@@ -99,9 +104,22 @@ mod insurance {
             self.premium.get(&caller).unwrap_or_default()
         }
 
+        // Function to retrieve caller's reserve
+        #[ink(message)]
+        pub fn get_my_reserve(&self) -> i32 {
+            let caller = self.env().caller();
+            self.reserve.get(&caller).unwrap_or_default()
+        }
+        pub fn inc_my_reserve(&mut self, by: i32) {
+                let caller = self.env().caller();
+                let my_reserve = self.get_my_reserve();
+                self.reserve.insert(caller, &(my_reserve + by));
+            }
+
         #[ink(message, payable)]
         pub fn deposit(&mut self, value: Balance) {
-            
+            let amount = Self::env().transferred_value();
+
 
         }
 
