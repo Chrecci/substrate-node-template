@@ -1,4 +1,5 @@
 #![cfg_attr(not(feature = "std"), no_std)]
+/// Two major features for the future: 1. Oracles, not currently in substrate natively. 2. Scheduled monthly payment for users
 
 /*  
 How this should work: We have a reserve map. Users can deposit into this reserve, verifies they send native currency to the contract, then stores equivalent 
@@ -25,19 +26,7 @@ mod insurance {
         payment_schedule: Mapping<AccountId, u32>,
         reserve: Mapping<AccountId, Balance>,
 
-     }     
-    
-    /// Specify ERC-20 error type.
-    // #[derive(Debug, PartialEq, Eq, scale::Encode, scale::Decode)]
-    // #[cfg_attr(feature = "std", derive(scale_info::TypeInfo))]
-    // pub enum Error {
-    //     /// Return if the balance cannot fulfill a request.
-    //     InsufficientBalance,
-    //     InsufficientAllowance,
-    //     NotOrigin
-        
-    // }
-    // pub type Result<T> = core::result::Result<T, Error>;
+    }
 
     impl Insurance {
         
@@ -90,12 +79,6 @@ mod insurance {
                 reserve: Mapping::default(),
             }
         }
-        /// Retrieve the balance of the caller.
-        #[ink(message)]
-        pub fn get_balance(&self) -> Option<Balance> {
-            let caller = self.env().caller();
-            self.reserve.get(caller)
-        }
 
         /// Credit more money to the contract.
         #[ink(message, payable)]
@@ -109,89 +92,104 @@ mod insurance {
         }
 
         /// Withdraw all your balance from the contract.
+        #[ink(message)]
         pub fn withdraw_all_from_reserve(&mut self) {
             let caller = self.env().caller();
-            let balance = self.balances.get(caller).unwrap();
-            self.reserve.remove(caller);
-            self.env().transfer(caller, balance).unwrap()
+            let balance = self.reserve.get(caller).unwrap();
+            if self.env().transfer(caller, balance).is_err() {
+                panic!(
+                    "Could not withdraw funds from contract reserve"
+                )
+            } else {
+                self.reserve.remove(caller);
+            }
         }
 
-
-
-
-        // Helper function to retrieve the caller's value stored in map
+        //  Call that automatically triggers transfer out of contract into owner account
         #[ink(message)]
-        pub fn get_mine(&self) -> i32 {
+        pub fn make_payment(&mut self) {
+            let caller = self.env().caller();
+            let user_premium = self.premium.get(caller).unwrap();
+            let available_balance = self.reserve.get(caller).unwrap();
+            if user_premium as u128 <= available_balance {
+                self.env().transfer(self.owner_account, user_premium as u128);
+            } else {
+                panic!(
+                    "Can not make payment at this time. Your reserve balance is too low. Please restock with deposit_to_contract call."
+                )
+            }
+            // If panic! doesn't trigger above then everything is ok. we can lower user reserve value
+            self.reserve.insert(&caller, &(available_balance - user_premium as u128));
+        }
+
+        // Function for allowing a caller to change their contract details. In the future, this should be approved by contract owner
+        #[ink(message)]
+        pub fn set_contract_info(&mut self, premium_init: i32, deductible_init: i32, legal_name_init: String, payment_schedule_init: u32) {
+            let caller = self.env().caller();
+            self.premium.insert(caller, &premium_init);
+            self.deductible.insert(caller, &deductible_init);
+            self.legal_name.insert(caller, &legal_name_init);
+            self.payment_schedule.insert(caller, &payment_schedule_init);
+        }
+
+        /// See who the contract owner is. This is also whoever is the first to deploy this contract
+        #[ink(message)]
+        pub fn get_contract_owner(&self) -> AccountId {
+            self.owner_account
+        }
+
+        // Helper functions to retrieve the caller's value stored in maps
+        // Retrieve the balance of the caller.
+        
+        #[ink(message)]
+        pub fn get_contract_info_premium(&self) -> i32 {
             let caller = self.env().caller();
             self.premium.get(&caller).unwrap_or_default()
+        }
+        #[ink(message)]
+        pub fn get_contract_info_deductible(&self) -> i32 {
+            let caller = self.env().caller();
+            self.deductible.get(&caller).unwrap_or_default()
+        }
+        #[ink(message)]
+        pub fn get_contract_info_payment_schedule(&self) -> u32 {
+            let caller = self.env().caller();
+            self.payment_schedule.get(&caller).unwrap_or_default()
+        }
+        #[ink(message)]
+        pub fn get_contract_info_legal_name(&self) -> String {
+            let caller = self.env().caller();
+            self.legal_name.get(&caller).unwrap_or_default()
+        }
+        // A user's available reserve
+        #[ink(message)]
+        pub fn get_contract_info_reserve(&self) -> u128 {
+            let caller = self.env().caller();
+            self.reserve.get(&caller).unwrap_or_default()
         }
 
         // Function to retrieve contract's total balance
         #[ink(message)]
-        pub fn get_mine(&self) -> i32 {
-            let caller = self.env().caller();
-            self.premium.get(&caller).unwrap_or_default()
+        pub fn get_total_contract_balance(&self) -> u128 {
+            self.env().balance()
         }
 
-        // Function to retrieve caller's reserve
-        #[ink(message)]
-        pub fn get_my_reserve(&self) -> i32 {
-            let caller = self.env().caller();
-            self.reserve.get(&caller).unwrap_or_default()
-        }
-        pub fn inc_my_reserve(&mut self, by: i32) {
-                let caller = self.env().caller();
-                let my_reserve = self.get_my_reserve();
-                self.reserve.insert(caller, &(my_reserve + by));
-            }
-
+        // WARNING. Function for contract owner to empty all funds. Should not exist in prod
         #[ink(message, payable)]
-        pub fn deposit(&mut self, value: Balance) {
-            let amount = Self::env().transferred_value();
+        pub fn withdraw_all_owner(&mut self) {
+            let caller = self.env().caller();
+            let total = self.env().balance();
+            if caller == self.owner_account {
+                if self.env().transfer(self.owner_account, total).is_err() {
+                    panic!(
+                        "requested transfer failed. this can be the case if the contract does not\
+                        have sufficient free funds or if the transfer would have brought the\
+                        contract's balance below minimum balance."
+                    )
+                }
 
-
-        }
-
-
-        #[ink(message, payable)]
-        pub fn withdraw_all(&mut self) {
-
-            let total = self.env().balance()
-            if self.env().transfer(self.owner_account, total).is_err() {
-                panic!(
-                    "requested transfer failed. this can be the case if the contract does not\
-                    have sufficient free funds or if the transfer would have brought the\
-                    contract's balance below minimum balance."
-                )
             }
         }
-
-        // // Insert 'by' i32 argument into map, adding it onto existing value retrieved using get_mine()
-        // #[ink(message)]
-        // pub fn inc_mine(&mut self, by: i32) {
-        //     let caller = self.env().caller();
-        //     let my_value = self.get_mine();
-        //     self.my_map.insert(caller, &(my_value + by));
-        // }
-
-        // // Helper function to remove a key value pair from map
-        // #[ink(message)]
-        // pub fn remove_mine(&self) {
-        // let caller = self.env().caller();
-        // self.my_map.remove(&caller)
-        // }
-                 
-        // /// Increments our value by input 'by'
-        // #[ink(message)]
-        // pub fn inc(&mut self, by: i32) {
-        //     self.value += by;
-        // }
-        
-        // /// Simply returns the current value of our `i32`.
-        // #[ink(message)]
-        // pub fn get(&self) -> i32 {
-        //     self.value
-        // }
     }
 
     /// Unit tests in Rust are normally defined within such a `#[cfg(test)]`
