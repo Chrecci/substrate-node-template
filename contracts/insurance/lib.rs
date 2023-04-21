@@ -14,7 +14,7 @@ mod insurance {
     use ink_prelude::string::String;
     use chrono::prelude::*;
 
-    /// Defines storage of the contract. In this case, we want to map a user's account ID with an integer value
+    /// Defines storage of the contract. 
     #[ink(storage)]
     pub struct Insurance {
         owner_account: AccountId,
@@ -32,15 +32,14 @@ mod insurance {
         
         // When instantiating a new contract, and only when instantiating, we can permanently set an owner address. Only this owner address can withdraw funds
         // payable allows native tokens to be sent to contract
-        #[ink(constructor, payable)]
+        #[ink(constructor)]
         pub fn new_insurance(premium_init: i32, deductible_init: i32, legal_name_init: String, payment_schedule_init: u32) -> Self {
 
-            let is_origin = Self::env().caller_is_origin();
-
+            // let is_origin = Self::env().caller_is_origin();
+            // In future, can ensure that only origin calls are allowed
             // if !is_origin {
             //     return Err(Error::NotOrigin)
             // }
-
             let mut premium = Mapping::default();
             let mut deductible = Mapping::default();
             let mut legal_name = Mapping::default();
@@ -111,7 +110,9 @@ mod insurance {
             let caller = self.env().caller();
             let user_premium = self.premium.get(caller).unwrap();
             let available_balance = self.reserve.get(caller).unwrap();
+            // Must cast rust types to be compatible. In Rust, keyword "as" is used for type casting.
             if user_premium as u128 <= available_balance {
+                // Transfer only goes through if the user's reserve value is greater than premium
                 self.env().transfer(self.owner_account, user_premium as u128);
             } else {
                 panic!(
@@ -140,7 +141,6 @@ mod insurance {
 
         // Helper functions to retrieve the caller's value stored in maps
         // Retrieve the balance of the caller.
-        
         #[ink(message)]
         pub fn get_contract_info_premium(&self) -> i32 {
             let caller = self.env().caller();
@@ -168,17 +168,19 @@ mod insurance {
             self.reserve.get(&caller).unwrap_or_default()
         }
 
-        // Function to retrieve contract's total balance
+        // Function to retrieve contract's total balance. This is all payments and transactions made to contract address
         #[ink(message)]
         pub fn get_total_contract_balance(&self) -> u128 {
             self.env().balance()
         }
 
-        // WARNING. Function for contract owner to empty all funds. Should not exist in prod
+        // WARNING. Function for contract owner to empty all funds and deposit into their own account. Should not exist in prod
         #[ink(message, payable)]
         pub fn withdraw_all_owner(&mut self) {
             let caller = self.env().caller();
             let total = self.env().balance();
+
+            // Safecheck to make sure only account owner can call
             if caller == self.owner_account {
                 if self.env().transfer(self.owner_account, total).is_err() {
                     panic!(
@@ -201,48 +203,41 @@ mod insurance {
         use super::*;
 
         // /// We test if the default constructor does its job.
-        // #[ink::test]
-        // fn default_works() {
-        //     let insurance = Insurance::default();
-        //     assert_eq!(insurance.get(), 0);
-        // }
-        // #[ink::test]
-        // fn my_map_works() {
-        //     let contract = Insurance::new(11);
-        //     assert_eq!(contract.get(), 11);
-        //     assert_eq!(contract.get_mine(), 0);
-        // }
+        #[ink::test]
+        fn new_constructor_works() {
+            // New insurance should have user values that match
+            let insurance = Insurance::new_insurance(400, 300, "Bobby Wow".to_string(), 30);
+            assert_eq!(insurance.get_contract_info_premium(), 400);
+            assert_eq!(insurance.get_contract_info_deductible(), 300);
+            assert_eq!(insurance.get_contract_info_legal_name(), "Bobby Wow");
+            assert_eq!(insurance.get_contract_info_payment_schedule(), 30);
+        }
+        #[ink::test]
+        fn set_contract_info_works() {
+            // First test default values are 0 or empty strings
+            let mut insurance = Insurance::default();
+            assert_eq!(insurance.get_contract_info_premium(), 0);
+            assert_eq!(insurance.get_contract_info_deductible(), 0);
+            assert_eq!(insurance.get_contract_info_legal_name(), "");
+            assert_eq!(insurance.get_contract_info_payment_schedule(), 0);
 
-        // #[ink::test]
-        // fn inc_mine_works() {
-        //     let mut contract = Insurance::new(11);
-        //     assert_eq!(contract.get_mine(), 0);
-        //     contract.inc_mine(5);
-        //     assert_eq!(contract.get_mine(), 5);
-        //     contract.inc_mine(5);
-        //     assert_eq!(contract.get_mine(), 10);
-        // }
+            // Values should change after setting contract info
+            insurance.set_contract_info(400, 300, "Bobby Wow".to_string(), 30);
+            assert_eq!(insurance.get_contract_info_premium(), 400);
+            assert_eq!(insurance.get_contract_info_deductible(), 300);
+            assert_eq!(insurance.get_contract_info_legal_name(), "Bobby Wow");
+            assert_eq!(insurance.get_contract_info_payment_schedule(), 30);
+        }
 
-        // #[ink::test]
-        // fn remove_mine_works() {
-        //     let mut contract = Insurance::new(11);
-        //     assert_eq!(contract.get_mine(), 0);
-        //     contract.inc_mine(5);
-        //     assert_eq!(contract.get_mine(), 5);
-        //     contract.remove_mine();
-        //     assert_eq!(contract.get_mine(), 0);
-        // }
+        #[ink::test]
+        fn empty_contract() {
+            // User should have nothing in reserve
+            let mut insurance = Insurance::default();
+            assert_eq!(insurance.get_contract_info_reserve(), 0);
 
-        // /// We test a simple use case of our contract.
-        // #[ink::test]
-        // fn it_works() {
-        //     let mut contract = Insurance::new(42);
-        //     assert_eq!(contract.get(), 42);
-        //     contract.inc(5);
-        //     assert_eq!(contract.get(), 47);
-        //     contract.inc(-50);
-        //     assert_eq!(contract.get(), -3);
-        // }
+            // Existential deposit within contract
+            assert_eq!(insurance.get_total_contract_balance(), 1000000);
+        }
          
     }
 }
