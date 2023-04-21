@@ -1,4 +1,4 @@
-# Needs to be removed for contract building. Substrate and rust versioning are out of synch
+# Delete file for contract building and testing. Substrate and rust versioning are out of sync. File is currently required for running a node
 [toolchain]
 channel = "nightly-2023-01-01"
 components = [ "rustfmt" ]
